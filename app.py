@@ -1,6 +1,21 @@
 import os
+import socket
 import asyncio
 import uuid
+
+# Railway resuelve DNS via IPv6 primero, lo que rompe la conexion a la API
+# de OpenAI ("Connection error"). Forzamos resolucion solo IPv4.
+_orig_getaddrinfo = socket.getaddrinfo
+
+
+def _getaddrinfo_ipv4(host, *args, **kwargs):
+    return [
+        ai for ai in _orig_getaddrinfo(host, *args, **kwargs)
+        if ai[0] == socket.AF_INET
+    ]
+
+
+socket.getaddrinfo = _getaddrinfo_ipv4
 
 from flask import Flask, render_template, request, jsonify
 
