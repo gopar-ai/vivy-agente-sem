@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vivy</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/char-mouth-closed.png') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body, html { margin: 0 !important; padding: 0 !important; width: 100vw; height: 100vh; background-color: #0a0a0c; font-family: 'Inter', sans-serif; overflow: hidden; color: #ffffff; }
+
+        /* Scanline overlay */
+        .scanlines { position: fixed; inset: 0; pointer-events: none; z-index: 999; mix-blend-mode: overlay;
+            background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 2px, transparent 4px); }
+        .scanlines::after { content: ''; position: absolute; inset: 0;
+            background: linear-gradient(to bottom, transparent 0%, rgba(0,240,255,0.06) 50%, transparent 100%);
+            animation: scan 6s linear infinite; }
+        @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+
+        .app-grid-layout { display: grid !important; grid-template-columns: 1fr 300px !important; width: 100vw !important; height: 100vh !important; }
+
+        .chat-container { grid-column: 1 !important; height: 100vh; display: flex; flex-direction: column; justify-content: space-between;
+            background-color: #0a0a0c;
+            background-image: radial-gradient(circle at center, #14121f 0%, #0a0a0c 70%),
+                linear-gradient(rgba(0,240,255,0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,240,255,0.05) 1px, transparent 1px);
+            background-size: auto, 40px 40px, 40px 40px;
+            margin: 0; padding: 0; width: 100% !important; position: relative; }
+
+        .chat-header { padding: 15px; text-align: center; position: relative; }
+        .chat-header h1 { font-family: 'Orbitron', sans-serif; margin: 0; color: #00f0ff; text-shadow: 0 0 10px #00f0ff, 0 0 25px rgba(0,240,255,0.4); text-transform: uppercase; letter-spacing: 4px; animation: flicker 4s infinite; }
+        @keyframes flicker {
+            0%, 92%, 100% { opacity: 1; text-shadow: 0 0 10px #00f0ff, 0 0 25px rgba(0,240,255,0.4); }
+            93% { opacity: 0.6; text-shadow: 2px 0 #ff0055, -2px 0 #00f0ff; }
+            95% { opacity: 1; text-shadow: 0 0 10px #00f0ff, 0 0 25px rgba(0,240,255,0.4); }
+            96% { opacity: 0.7; text-shadow: -2px 0 #ff0055, 2px 0 #00f0ff; }
+            97% { opacity: 1; }
+        }
+        .chat-header .subtitle { font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 3px; color: #ff0055; text-transform: uppercase; margin-top: 4px; }
+
+        .character-viewer { flex: 1; display: flex; justify-content: center; align-items: center; max-height: 45vh; position: relative; }
+        .character-viewer::before { content: ''; position: absolute; width: 340px; height: 340px; border-radius: 50%;
+            border: 1px solid rgba(0,240,255,0.4); box-shadow: 0 0 25px rgba(0,240,255,0.25), inset 0 0 25px rgba(255,0,85,0.15);
+            animation: pulse-ring 3s ease-in-out infinite; }
+        @keyframes pulse-ring { 0%, 100% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.03); opacity: 1; } }
+        .character-viewer img { width: 320px; height: 320px; object-fit: contain; border-radius: 50%; background: #ffffff; filter: drop-shadow(0 0 15px rgba(0, 240, 255, 0.3)); position: relative; z-index: 1; }
+
+        .status-container { flex: 1; max-height: 20vh; overflow-y: auto; padding: 0 40px; display: flex; justify-content: center; align-items: center; }
+        #status { text-align: center; margin: 0; color: #00f0ff; font-size: 15px; line-height: 1.6; width: 100%; }
+        #status::after { content: '▌'; animation: blink 1s steps(1) infinite; color: #ff0055; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Welcome screen overlay (LLM-style start screen) */
+        .welcome-screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; gap: 18px; z-index: 5; padding: 0 40px; background: rgba(10,10,12,0.55); backdrop-filter: blur(2px); }
+        .welcome-screen.visible { display: flex; }
+        .welcome-screen h2 { font-family: 'Orbitron', sans-serif; color: #00f0ff; text-shadow: 0 0 12px rgba(0,240,255,0.5); letter-spacing: 2px; margin: 0; font-size: 24px; }
+        .welcome-screen p { color: #b9c4cc; margin: 0; font-size: 14px; max-width: 420px; }
+        .suggestion-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 480px; }
+        .chip { font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.5px; padding: 10px 16px; border-radius: 20px;
+            border: 1px solid #ff0055; color: #ff8fb3; background: rgba(255,0,85,0.08); cursor: pointer; transition: all 0.15s; }
+        .chip:hover { background: rgba(255,0,85,0.2); color: #ffffff; box-shadow: 0 0 10px rgba(255,0,85,0.35); }
+
+        .chat-input-area { display: flex; flex-direction: column; gap: 10px; padding: 20px; width: 100%; background: #0f0e15; border-top: 2px solid #ff0055; box-shadow: 0 -5px 20px rgba(255, 0, 85, 0.2); z-index: 6; }
+        .input-row { display: flex; gap: 10px; align-items: flex-end; }
+        #text-input { flex: 1; height: 50px; min-height: 50px; max-height: 140px; background: #07060a; color: #ffffff; border: 1px solid #ff0055; border-radius: 4px; padding: 10px; resize: none; font-family: inherit; }
+        #text-input:focus { outline: none; box-shadow: 0 0 8px #ff0055; }
+        #attach-button, #send-button { font-family: 'Orbitron', sans-serif; font-weight: bold; display: flex; justify-content: center; align-items: center; min-width: 50px; height: 50px; background: #ff0055; color: white; border: none; border-radius: 4px; cursor: pointer; box-shadow: 0 0 10px #ff0055; transition: box-shadow 0.2s; font-size: 18px; }
+        #send-button { min-width: 100px; font-size: 14px; }
+        #attach-button:hover, #send-button:hover { box-shadow: 0 0 18px #ff0055; }
+
+        .attachments-preview { display: flex; flex-wrap: wrap; gap: 8px; }
+        .attachment-chip { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 14px; border: 1px solid #00f0ff;
+            background: rgba(0,240,255,0.08); color: #00f0ff; font-size: 11px; }
+        .attachment-chip .remove-attachment { cursor: pointer; font-weight: bold; color: #ff0055; }
+
+        .history-sidebar { grid-column: 2 !important; width: 300px !important; height: 100vh; background-color: #0b0a10; border-left: 2px solid #00f0ff; display: flex; flex-direction: column; padding: 20px; box-shadow: -5px 0 20px rgba(0, 240, 255, 0.15); gap: 10px; }
+        #reset-button { font-family: 'Orbitron', sans-serif; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; padding: 14px; border: none; border-radius: 4px; cursor: pointer; background: #ff0055; color: #fff; box-shadow: 0 0 10px #ff0055; margin-bottom: 6px; transition: box-shadow 0.2s; }
+        #reset-button:hover { box-shadow: 0 0 18px #ff0055; }
+        .sidebar-title { font-family: 'Orbitron', sans-serif; font-size: 11px; color: #ff0055; text-transform: uppercase; margin: 0 0 4px 4px; letter-spacing: 2px; display: flex; align-items: center; gap: 8px; }
+        .sidebar-title .led { width: 8px; height: 8px; border-radius: 50%; background: #00ff8c; box-shadow: 0 0 8px #00ff8c; animation: blink 1.6s steps(1) infinite; }
+
+        .conversation-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+        .conversation-list::-webkit-scrollbar { width: 6px; }
+        .conversation-list::-webkit-scrollbar-thumb { background: #00f0ff; border-radius: 3px; }
+
+        .conversation-item { display: flex; align-items: center; gap: 4px; padding: 10px 8px 10px 12px; border-radius: 4px; font-size: 12.5px; cursor: pointer; border: 1px solid transparent;
+            background-color: #12111a; color: #c9c9d6; position: relative; transition: border-color 0.15s, color 0.15s; }
+        .conversation-item:hover { border-color: rgba(0,240,255,0.4); color: #ffffff; }
+        .conversation-item.active { border-color: #00f0ff; color: #00f0ff; box-shadow: 0 0 8px rgba(0,240,255,0.25); }
+        .conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .conv-title.pinned::before { content: '📌 '; }
+        .conv-title-input { flex: 1; background: #07060a; color: #fff; border: 1px solid #00f0ff; border-radius: 3px; padding: 2px 4px; font-size: 12px; font-family: inherit; }
+
+        .conv-menu-btn { opacity: 0; background: none; border: none; color: inherit; cursor: pointer; font-size: 16px; padding: 0 4px; line-height: 1; }
+        .conversation-item:hover .conv-menu-btn, .conversation-item.menu-open .conv-menu-btn { opacity: 1; }
+        .conv-menu { position: absolute; top: 100%; right: 4px; z-index: 20; background: #0f0e15; border: 1px solid #00f0ff; border-radius: 4px;
+            min-width: 150px; box-shadow: 0 4px 16px rgba(0,0,0,0.6); overflow: hidden; }
+        .conv-menu.hidden { display: none; }
+        .conv-menu-item { padding: 9px 12px; font-size: 12px; cursor: pointer; color: #c9c9d6; white-space: nowrap; }
+        .conv-menu-item:hover { background: rgba(0,240,255,0.12); color: #ffffff; }
+        .conv-menu-item.danger:hover { background: rgba(255,0,85,0.15); color: #ff5d8a; }
+    </style>
+</head>
+<body>
+    <div class="scanlines"></div>
+    <div class="app-grid-layout">
+        <div class="chat-container">
+            <header class="chat-header">
+                <h1>AI Vivy</h1>
+                <div class="subtitle">// Terminal de Detecta &mdash; Nodo Activo</div>
+            </header>
+            <div class="character-viewer">
+                <img id="character-image" src="{{ url_for('static', filename='images/char-mouth-closed.png') }}" alt="AI Vivy">
+            </div>
+            <div class="status-container"><p id="status">[SISTEMA EN LINEA]: Esperando tu mensaje...</p></div>
+
+            <div class="welcome-screen" id="welcome-screen">
+                <h2>Hola, Jan 👋</h2>
+                <p>Soy Vivy, tu compañera en la terminal de Detecta. Pregúntame lo que sea, desde una auditoría SEM hasta una charla random.</p>
+                <div class="suggestion-chips">
+                    <div class="chip" data-prompt="Cuentame algo curioso o interesante de hoy.">✨ Sorprendeme</div>
+                </div>
+            </div>
+
+            <footer class="chat-input-area">
+                <div class="attachments-preview" id="attachments-preview"></div>
+                <div class="input-row">
+                    <input type="file" id="file-input" accept="image/*,application/pdf" multiple hidden>
+                    <button id="attach-button" title="Adjuntar foto o PDF">📎</button>
+                    <textarea id="text-input" placeholder="Escribe un mensaje para Vivy..."></textarea>
+                    <button id="send-button">ENVIAR</button>
+                </div>
+            </footer>
+        </div>
+        <div class="history-sidebar">
+            <button id="reset-button">+ Nueva conversacion</button>
+            <h3 class="sidebar-title"><span class="led"></span>Conversaciones</h3>
+            <div class="conversation-list" id="conversation-list"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const textInput = document.getElementById('text-input');
+            const sendButton = document.getElementById('send-button');
+            const resetButton = document.getElementById('reset-button');
+            const status = document.getElementById('status');
+            const characterImage = document.getElementById('character-image');
+            const conversationList = document.getElementById('conversation-list');
+            const welcomeScreen = document.getElementById('welcome-screen');
+            const attachButton = document.getElementById('attach-button');
+            const fileInput = document.getElementById('file-input');
+            const attachmentsPreview = document.getElementById('attachments-preview');
+
+            const mouthClosed = "{{ url_for('static', filename='images/char-mouth-closed.png') }}";
+            const mouthOpen = "{{ url_for('static', filename='images/char-mouth-open.png') }}";
+
+            let lipSyncInterval = null;
+            let spanishVoice = null;
+            let pendingFiles = [];
+
+            const FEMALE_NAMES = /female|mujer|elvira|helena|lucia|lupe|paulina|monica|m[oó]nica|sabina|conchita|laura|ines|in[eé]s|esperanza|marisol|valeria|camila|sofia|sof[ií]a|mia|m[ií]a/i;
+            const YOUNG_FEMALE_NAMES = /paulina|valeria|camila|sofia|sof[ií]a|mia|m[ií]a|lupe/i;
+            const MALE_NAMES = /male|hombre|jorge|diego|pablo|enrique|carlos|raul|ra[uú]l|fernando|jose|jorge/i;
+
+            const pickVoice = () => {
+                const voices = window.speechSynthesis.getVoices();
+                const esVoices = voices.filter(v => v.lang.startsWith('es'));
+                spanishVoice = esVoices.find(v => YOUNG_FEMALE_NAMES.test(v.name))
+                    || esVoices.find(v => FEMALE_NAMES.test(v.name) && /natural/i.test(v.name))
+                    || esVoices.find(v => FEMALE_NAMES.test(v.name))
+                    || esVoices.find(v => !MALE_NAMES.test(v.name) && /Google/i.test(v.name))
+                    || esVoices.find(v => !MALE_NAMES.test(v.name))
+                    || esVoices[0]
+                    || null;
+            };
+            pickVoice();
+            window.speechSynthesis.onvoiceschanged = pickVoice;
+
+            const startLipSync = () => {
+                let open = false;
+                lipSyncInterval = setInterval(() => {
+                    characterImage.src = open ? mouthClosed : mouthOpen;
+                    open = !open;
+                }, 220);
+            };
+
+            const stopLipSync = () => {
+                clearInterval(lipSyncInterval);
+                lipSyncInterval = null;
+                characterImage.src = mouthClosed;
+            };
+
+            const EMOJI_REGEX = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}️‍]/gu;
+            const stripEmojis = (text) => text.replace(EMOJI_REGEX, '').replace(/ {2,}/g, ' ').trim();
+
+            const speak = (text) => {
+                const utterance = new SpeechSynthesisUtterance(stripEmojis(text));
+                utterance.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
+                if (spanishVoice) utterance.voice = spanishVoice;
+                utterance.pitch = 1.25;
+                utterance.rate = 1.05;
+                utterance.onstart = startLipSync;
+                utterance.onend = stopLipSync;
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utterance);
+            };
+
+            const closeAllMenus = () => {
+                document.querySelectorAll('.conv-menu').forEach(m => m.classList.add('hidden'));
+                document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('menu-open'));
+            };
+
+            const renderAttachments = () => {
+                attachmentsPreview.innerHTML = '';
+                pendingFiles.forEach((file, index) => {
+                    const chip = document.createElement('div');
+                    chip.className = 'attachment-chip';
+                    const label = document.createElement('span');
+                    label.textContent = (file.type.startsWith('image/') ? '🖼️ ' : '📄 ') + file.name;
+                    const remove = document.createElement('span');
+                    remove.className = 'remove-attachment';
+                    remove.textContent = '✕';
+                    remove.addEventListener('click', () => {
+                        pendingFiles.splice(index, 1);
+                        renderAttachments();
+                    });
+                    chip.appendChild(label);
+                    chip.appendChild(remove);
+                    attachmentsPreview.appendChild(chip);
+                });
+            };
+
+            const loadConversations = async () => {
+                try {
+                    const response = await fetch('/conversations');
+                    const data = await response.json();
+                    conversationList.innerHTML = '';
+
+                    let currentConv = null;
+                    data.conversations.forEach(conv => {
+                        if (conv.id === data.current) currentConv = conv;
+
+                        const item = document.createElement('div');
+                        item.className = 'conversation-item' + (conv.id === data.current ? ' active' : '');
+                        item.dataset.id = conv.id;
+
+                        const title = document.createElement('span');
+                        title.className = 'conv-title' + (conv.pinned ? ' pinned' : '');
+                        title.textContent = conv.title;
+                        title.addEventListener('click', () => switchConversation(conv.id));
+
+                        const menuBtn = document.createElement('button');
+                        menuBtn.className = 'conv-menu-btn';
+                        menuBtn.textContent = '⋮';
+                        menuBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const wasOpen = !menu.classList.contains('hidden');
+                            closeAllMenus();
+                            if (!wasOpen) {
+                                menu.classList.remove('hidden');
+                                item.classList.add('menu-open');
+                            }
+                        });
+
+                        const menu = document.createElement('div');
+                        menu.className = 'conv-menu hidden';
+
+                        const pinItem = document.createElement('div');
+                        pinItem.className = 'conv-menu-item';
+                        pinItem.textContent = conv.pinned ? '📌 Quitar de fijados' : '📌 Fijar';
+                        pinItem.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            closeAllMenus();
+                            await fetch('/pin_chat', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: conv.id }),
+                            });
+                            await loadConversations();
+                        });
+
+                        const renameItem = document.createElement('div');
+                        renameItem.className = 'conv-menu-item';
+                        renameItem.textContent = '✏️ Renombrar';
+                        renameItem.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            closeAllMenus();
+                            const input = document.createElement('input');
+                            input.className = 'conv-title-input';
+                            input.value = conv.title;
+                            title.replaceWith(input);
+                            input.focus();
+                            input.select();
+
+                            const commit = async () => {
+                                const newTitle = input.value.trim() || conv.title;
+                                await fetch('/rename_chat', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: conv.id, title: newTitle }),
+                                });
+                                await loadConversations();
+                            };
+                            input.addEventListener('keydown', (ev) => {
+                                if (ev.key === 'Enter') commit();
+                                if (ev.key === 'Escape') loadConversations();
+                            });
+                            input.addEventListener('blur', commit);
+                        });
+
+                        const deleteItem = document.createElement('div');
+                        deleteItem.className = 'conv-menu-item danger';
+                        deleteItem.textContent = '🗑️ Eliminar';
+                        deleteItem.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            closeAllMenus();
+                            await fetch('/delete_chat', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: conv.id }),
+                            });
+                            await loadConversations();
+                        });
+
+                        menu.appendChild(pinItem);
+                        menu.appendChild(renameItem);
+                        menu.appendChild(deleteItem);
+
+                        item.appendChild(title);
+                        item.appendChild(menuBtn);
+                        item.appendChild(menu);
+                        conversationList.appendChild(item);
+                    });
+
+                    if (!currentConv || currentConv.title === 'Nueva conversacion') {
+                        welcomeScreen.classList.add('visible');
+                    } else {
+                        welcomeScreen.classList.remove('visible');
+                    }
+                } catch (error) {
+                    // ignore
+                }
+            };
+
+            document.addEventListener('click', closeAllMenus);
+
+            const switchConversation = async (id) => {
+                try {
+                    await fetch('/switch_chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id }),
+                    });
+                    status.textContent = "[SISTEMA EN LINEA]: Conversacion cargada. Esperando tu mensaje...";
+                    await loadConversations();
+                } catch (error) {
+                    status.textContent = 'Error al cambiar de conversacion.';
+                }
+            };
+
+            const sendMessage = async (message) => {
+                if (!message.trim() && pendingFiles.length === 0) return;
+
+                status.textContent = "Pensando...";
+                welcomeScreen.classList.remove('visible');
+
+                try {
+                    let response;
+                    if (pendingFiles.length > 0) {
+                        const formData = new FormData();
+                        formData.append('message', message);
+                        pendingFiles.forEach(file => formData.append('files', file));
+                        response = await fetch('/chat', { method: 'POST', body: formData });
+                    } else {
+                        response = await fetch('/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message: message }),
+                        });
+                    }
+                    const data = await response.json();
+                    status.textContent = data.response;
+                    speak(data.response);
+                    pendingFiles = [];
+                    renderAttachments();
+                    await loadConversations();
+                } catch (error) {
+                    status.textContent = 'Error de conexion. Intenta de nuevo.';
+                }
+            };
+
+            const handleSendMessage = async () => {
+                const message = textInput.value.trim();
+                textInput.value = '';
+                await sendMessage(message);
+            };
+
+            const handleNewChat = async () => {
+                status.textContent = "[SISTEMA EN LINEA]: Iniciando nueva conversacion...";
+                try {
+                    await fetch('/new_chat', { method: 'POST' });
+                    status.textContent = "[SISTEMA EN LINEA]: Esperando tu mensaje...";
+                    pendingFiles = [];
+                    renderAttachments();
+                    await loadConversations();
+                } catch (error) {
+                    status.textContent = 'Error al crear la conversacion.';
+                }
+            };
+
+            loadConversations();
+
+            sendButton.addEventListener('click', handleSendMessage);
+            resetButton.addEventListener('click', handleNewChat);
+            textInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                }
+            });
+
+            attachButton.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', () => {
+                pendingFiles.push(...Array.from(fileInput.files));
+                fileInput.value = '';
+                renderAttachments();
+            });
+
+            document.querySelectorAll('.chip').forEach(chip => {
+                chip.addEventListener('click', () => sendMessage(chip.dataset.prompt));
+            });
+        });
+    </script>
+</body>
+</html>
