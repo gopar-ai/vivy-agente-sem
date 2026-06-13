@@ -158,6 +158,7 @@
             const mouthOpen = "{{ url_for('static', filename='images/char-mouth-open.png') }}";
 
             let lipSyncInterval = null;
+            let lipSyncTimeout = null;
             let spanishVoice = null;
             let pendingFiles = [];
             let currentUtterance = null;
@@ -181,6 +182,7 @@
             window.speechSynthesis.onvoiceschanged = pickVoice;
 
             const startLipSync = () => {
+                if (lipSyncInterval) return;
                 let open = false;
                 lipSyncInterval = setInterval(() => {
                     characterImage.src = open ? mouthClosed : mouthOpen;
@@ -191,6 +193,8 @@
             const stopLipSync = () => {
                 clearInterval(lipSyncInterval);
                 lipSyncInterval = null;
+                clearTimeout(lipSyncTimeout);
+                lipSyncTimeout = null;
                 characterImage.src = mouthClosed;
             };
 
@@ -198,7 +202,8 @@
             const stripEmojis = (text) => text.replace(EMOJI_REGEX, '').replace(/ {2,}/g, ' ').trim();
 
             const speak = (text) => {
-                const utterance = new SpeechSynthesisUtterance(stripEmojis(text));
+                const cleanText = stripEmojis(text);
+                const utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
                 if (spanishVoice) utterance.voice = spanishVoice;
                 utterance.pitch = 1.25;
@@ -208,6 +213,12 @@
                 currentUtterance = utterance;
                 window.speechSynthesis.cancel();
                 window.speechSynthesis.speak(utterance);
+
+                // Chrome no siempre dispara onstart/onend de forma confiable, asi que
+                // tambien animamos la boca segun la duracion estimada del texto.
+                startLipSync();
+                const estimatedDuration = Math.max(800, (cleanText.length / 14) * 1000);
+                lipSyncTimeout = setTimeout(stopLipSync, estimatedDuration);
             };
 
             const closeAllMenus = () => {
