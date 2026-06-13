@@ -160,6 +160,7 @@
             let lipSyncInterval = null;
             let spanishVoice = null;
             let pendingFiles = [];
+            let currentUtterance = null;
 
             const FEMALE_NAMES = /female|mujer|elvira|helena|lucia|lupe|paulina|monica|m[oó]nica|sabina|conchita|laura|ines|in[eé]s|esperanza|marisol|valeria|camila|sofia|sof[ií]a|mia|m[ií]a/i;
             const YOUNG_FEMALE_NAMES = /paulina|valeria|camila|sofia|sof[ií]a|mia|m[ií]a|lupe/i;
@@ -204,6 +205,7 @@
                 utterance.rate = 1.05;
                 utterance.onstart = startLipSync;
                 utterance.onend = stopLipSync;
+                currentUtterance = utterance;
                 window.speechSynthesis.cancel();
                 window.speechSynthesis.speak(utterance);
             };
