@@ -203,22 +203,27 @@
 
             const speak = (text) => {
                 const cleanText = stripEmojis(text);
-                const utterance = new SpeechSynthesisUtterance(cleanText);
-                utterance.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
-                if (spanishVoice) utterance.voice = spanishVoice;
-                utterance.pitch = 1.25;
-                utterance.rate = 1.05;
-                utterance.onstart = startLipSync;
-                utterance.onend = stopLipSync;
-                currentUtterance = utterance;
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(utterance);
 
-                // Chrome no siempre dispara onstart/onend de forma confiable, asi que
-                // tambien animamos la boca segun la duracion estimada del texto.
+                // Animamos la boca segun la duracion estimada del texto sin depender
+                // de que la sintesis de voz funcione (puede fallar segun navegador/dominio).
                 startLipSync();
                 const estimatedDuration = Math.max(800, (cleanText.length / 14) * 1000);
                 lipSyncTimeout = setTimeout(stopLipSync, estimatedDuration);
+
+                try {
+                    const utterance = new SpeechSynthesisUtterance(cleanText);
+                    utterance.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
+                    if (spanishVoice) utterance.voice = spanishVoice;
+                    utterance.pitch = 1.25;
+                    utterance.rate = 1.05;
+                    utterance.onstart = startLipSync;
+                    utterance.onend = stopLipSync;
+                    currentUtterance = utterance;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(utterance);
+                } catch (error) {
+                    console.error('No se pudo iniciar la sintesis de voz:', error);
+                }
             };
 
             const closeAllMenus = () => {
