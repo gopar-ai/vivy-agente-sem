@@ -683,16 +683,16 @@ document.addEventListener('DOMContentLoaded', () => {
         .replace(/\s{2,}/g, ' ')
         .trim();
     const speak = (t) => {
+        if (!voiceOn || !('speechSynthesis' in window)) return;
         const cleanText = cleanForSpeech(t);
 
-        // La boca se anima segun la duracion estimada del texto, independientemente
-        // de si la sintesis de voz esta activada o disponible en el navegador.
+        // La boca se anima segun la duracion estimada del texto, sin depender
+        // de que la sintesis de voz dispare onstart/onend de forma confiable.
         startLip();
         clearTimeout(lipTimeout);
         const estimatedDuration = Math.max(800, (cleanText.length / 14) * 1000);
         lipTimeout = setTimeout(stopLip, estimatedDuration);
 
-        if (!voiceOn || !('speechSynthesis' in window)) return;
         try {
             const u = new SpeechSynthesisUtterance(cleanText);
             u.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
