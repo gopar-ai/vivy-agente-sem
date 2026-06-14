@@ -168,6 +168,7 @@
             const MALE_NAMES = /male|hombre|jorge|diego|pablo|enrique|carlos|raul|ra[uú]l|fernando|jose|jorge/i;
 
             const pickVoice = () => {
+                if (!('speechSynthesis' in window)) return;
                 const voices = window.speechSynthesis.getVoices();
                 const esVoices = voices.filter(v => v.lang.startsWith('es'));
                 spanishVoice = esVoices.find(v => YOUNG_FEMALE_NAMES.test(v.name))
@@ -178,8 +179,10 @@
                     || esVoices[0]
                     || null;
             };
-            pickVoice();
-            window.speechSynthesis.onvoiceschanged = pickVoice;
+            if ('speechSynthesis' in window) {
+                pickVoice();
+                window.speechSynthesis.onvoiceschanged = pickVoice;
+            }
 
             const startLipSync = () => {
                 if (lipSyncInterval) return;
