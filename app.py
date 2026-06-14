@@ -48,21 +48,17 @@ if not os.environ.get('GOOGLE_ADS_DEVELOPER_TOKEN'):
 
 from character import root_agent, execute_confirmed_action
 import memory
+import conversations_db
 
 app = Flask(__name__, template_folder='templates')
 
 memory.init_db()
+conversations_db.init_db()
 
 runner = InMemoryRunner(agent=root_agent, app_name='ai_vivy')
 
 APP_NAME = 'ai_vivy'
 USER_ID = 'detecta_user'
-
-# Ordered list of conversation ids (display order is computed from this + pinned flag).
-CONVERSATION_ORDER = []
-# session_id -> {"title": str, "pinned": bool}
-CONVERSATIONS = {}
-CURRENT_SESSION_ID = None
 
 
 def get_event_loop():
@@ -75,37 +71,29 @@ def get_event_loop():
 
 
 async def create_conversation():
-    global CURRENT_SESSION_ID
     session_id = str(uuid.uuid4())
     await runner.session_service.create_session(
         app_name=APP_NAME, user_id=USER_ID, session_id=session_id,
         state=memory.get_all_preferences(),
     )
-    CONVERSATIONS[session_id] = {"title": "Nueva conversacion", "pinned": False}
-    CONVERSATION_ORDER.insert(0, session_id)
-    CURRENT_SESSION_ID = session_id
-    memory.save_conversation(session_id, "Nueva conversacion", False)
+    conversations_db.create_conversation(session_id, "Nueva conversacion")
+    conversations_db.set_current_session(session_id)
     return session_id
 
 
 async def ensure_conversation():
-    global CURRENT_SESSION_ID
-    if CURRENT_SESSION_ID is None:
-        await create_conversation()
-    return CURRENT_SESSION_ID
+    session_id = conversations_db.get_current_session()
+    if session_id is None:
+        session_id = await create_conversation()
+    return session_id
 
 
 async def load_conversations():
-    global CURRENT_SESSION_ID
-    for conv in memory.get_all_conversations():
-        CONVERSATIONS[conv['id']] = {"title": conv['title'], "pinned": conv['pinned']}
-        CONVERSATION_ORDER.append(conv['id'])
+    for conv in conversations_db.get_all():
         await runner.session_service.create_session(
             app_name=APP_NAME, user_id=USER_ID, session_id=conv['id'],
             state=memory.get_all_preferences(),
         )
-    if CONVERSATION_ORDER:
-        CURRENT_SESSION_ID = CONVERSATION_ORDER[0]
 
 
 get_event_loop().run_until_complete(load_conversations())
@@ -114,10 +102,10 @@ get_event_loop().run_until_complete(load_conversations())
 async def run_agent(message: str, files=None) -> str:
     session_id = await ensure_conversation()
 
-    if CONVERSATIONS[session_id]["title"] == "Nueva conversacion" and message.strip():
+    if conversations_db.get_title(session_id) == "Nueva conversacion" and message.strip():
         title = message.strip().replace("\n", " ")
-        CONVERSATIONS[session_id]["title"] = (title[:40] + "...") if len(title) > 40 else title
-        memory.update_conversation_title(session_id, CONVERSATIONS[session_id]["title"])
+        title = (title[:40] + "...") if len(title) > 40 else title
+        conversations_db.update_title(session_id, title)
 
     parts = []
     for file in (files or []):
@@ -202,7 +190,7 @@ def chat():
 @app.route('/messages', methods=['GET'])
 def get_messages():
     session_id = request.args.get('id')
-    if session_id not in CONVERSATIONS:
+    if not conversations_db.exists(session_id):
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
 
     return jsonify({'messages': memory.get_messages(session_id)})
@@ -231,16 +219,9 @@ def update_preferences():
 
 @app.route('/conversations', methods=['GET'])
 def list_conversations():
-    ordered = sorted(
-        CONVERSATION_ORDER,
-        key=lambda cid: (not CONVERSATIONS[cid]['pinned'], CONVERSATION_ORDER.index(cid)),
-    )
     return jsonify({
-        'current': CURRENT_SESSION_ID,
-        'conversations': [
-            {'id': cid, 'title': CONVERSATIONS[cid]['title'], 'pinned': CONVERSATIONS[cid]['pinned']}
-            for cid in ordered
-        ],
+        'current': conversations_db.get_current_session(),
+        'conversations': conversations_db.get_all(),
     })
 
 
@@ -256,12 +237,11 @@ def new_chat():
 
 @app.route('/switch_chat', methods=['POST'])
 def switch_chat():
-    global CURRENT_SESSION_ID
     data = request.get_json() or {}
     session_id = data.get('id')
-    if session_id not in CONVERSATIONS:
+    if not conversations_db.exists(session_id):
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
-    CURRENT_SESSION_ID = session_id
+    conversations_db.set_current_session(session_id)
     return jsonify({'status': 'ok'})
 
 
@@ -270,11 +250,10 @@ def rename_chat():
     data = request.get_json() or {}
     session_id = data.get('id')
     title = (data.get('title') or '').strip()
-    if session_id not in CONVERSATIONS:
+    if not conversations_db.exists(session_id):
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
     if title:
-        CONVERSATIONS[session_id]['title'] = title
-        memory.update_conversation_title(session_id, title)
+        conversations_db.update_title(session_id, title)
     return jsonify({'status': 'ok'})
 
 
@@ -282,29 +261,29 @@ def rename_chat():
 def pin_chat():
     data = request.get_json() or {}
     session_id = data.get('id')
-    if session_id not in CONVERSATIONS:
+    if not conversations_db.exists(session_id):
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
-    CONVERSATIONS[session_id]['pinned'] = not CONVERSATIONS[session_id]['pinned']
-    memory.update_conversation_pinned(session_id, CONVERSATIONS[session_id]['pinned'])
-    return jsonify({'status': 'ok', 'pinned': CONVERSATIONS[session_id]['pinned']})
+    pinned = conversations_db.toggle_pinned(session_id)
+    return jsonify({'status': 'ok', 'pinned': pinned})
 
 
 @app.route('/delete_chat', methods=['POST'])
 def delete_chat():
-    global CURRENT_SESSION_ID
     data = request.get_json() or {}
     session_id = data.get('id')
-    if session_id not in CONVERSATIONS:
+    if not conversations_db.exists(session_id):
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
 
-    CONVERSATIONS.pop(session_id)
-    CONVERSATION_ORDER.remove(session_id)
-    memory.delete_conversation(session_id)
+    conversations_db.delete_conversation(session_id)
+    memory.delete_messages(session_id)
 
-    if CURRENT_SESSION_ID == session_id:
-        CURRENT_SESSION_ID = CONVERSATION_ORDER[0] if CONVERSATION_ORDER else None
+    current = conversations_db.get_current_session()
+    if current == session_id:
+        remaining = conversations_db.get_all()
+        current = remaining[0]['id'] if remaining else None
+        conversations_db.set_current_session(current)
 
-    return jsonify({'status': 'ok', 'current': CURRENT_SESSION_ID})
+    return jsonify({'status': 'ok', 'current': current})
 
 
 if __name__ == '__main__':

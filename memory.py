@@ -31,14 +31,6 @@ def init_db():
             )
         """)
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id TEXT PRIMARY KEY,
-                title TEXT,
-                pinned INTEGER DEFAULT 0,
-                created_at TEXT
-            )
-        """)
-        conn.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conversation_id TEXT,
@@ -91,41 +83,9 @@ def update_action_status(action_id, status):
         )
 
 
-def save_conversation(conversation_id, title, pinned=False):
-    now = datetime.now(timezone.utc).isoformat()
+def delete_messages(conversation_id):
     with _connect() as conn:
-        conn.execute("""
-            INSERT INTO conversations (id, title, pinned, created_at) VALUES (?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET title = excluded.title, pinned = excluded.pinned
-        """, (conversation_id, title, int(pinned), now))
-
-
-def update_conversation_title(conversation_id, title):
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id)
-        )
-
-
-def update_conversation_pinned(conversation_id, pinned):
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE conversations SET pinned = ? WHERE id = ?", (int(pinned), conversation_id)
-        )
-
-
-def delete_conversation(conversation_id):
-    with _connect() as conn:
-        conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
         conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
-
-
-def get_all_conversations():
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT id, title, pinned FROM conversations ORDER BY created_at DESC"
-        ).fetchall()
-    return [{"id": row[0], "title": row[1], "pinned": bool(row[2])} for row in rows]
 
 
 def save_message(conversation_id, role, text):

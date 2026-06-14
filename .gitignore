@@ -7,3 +7,4 @@ google-ads.yaml
 oauth_step1_get_url.py
 oauth_device_flow.py
 vivy.db
+conversations.db
