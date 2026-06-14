@@ -28,7 +28,7 @@ El avatar anima la boca en sincronía con la respuesta hablada (Web Speech API),
 
 ## Demo
 
-
+[▶️ Ver video de demo](https://github.com/gopar-ai/vivy-agente-sem/releases/download/demo-v1/Vivy.-.Google.Chrome.2026-06-14.00-36-07.mp4)
 
 ---
 
