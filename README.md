@@ -1,6 +1,6 @@
 # Vivy — Agente SEM
 
-Agente conversacional con IA, persona cyberpunk y avatar animado, que analiza campañas de Google Ads, sugiere optimizaciones y ejecuta cambios (con confirmación) mediante lenguaje natural.
+Agente conversacional con IA, y avatar animado, que analiza campañas de Google Ads, sugiere optimizaciones y ejecuta cambios (con confirmación) mediante lenguaje natural.
 
 ## Cómo funciona
 
