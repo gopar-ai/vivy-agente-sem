@@ -1,6 +1,7 @@
 import os
 import socket
 import asyncio
+import json
 import uuid
 
 # Railway resuelve DNS via IPv6 primero, lo que rompe la conexion a la API
@@ -34,9 +35,23 @@ if not os.environ.get('OPENAI_API_KEY'):
         with open(key_path) as f:
             os.environ['OPENAI_API_KEY'] = f.read().strip()
 
-from character import root_agent
+if not os.environ.get('GOOGLE_ADS_DEVELOPER_TOKEN'):
+    ads_env_path = os.path.expanduser('~/.google_ads_credentials.env')
+    if os.path.exists(ads_env_path):
+        with open(ads_env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                os.environ.setdefault(key.strip(), value.strip())
+
+from character import root_agent, execute_confirmed_action
+import memory
 
 app = Flask(__name__, template_folder='templates')
+
+memory.init_db()
 
 runner = InMemoryRunner(agent=root_agent, app_name='ai_vivy')
 
@@ -63,7 +78,8 @@ async def create_conversation():
     global CURRENT_SESSION_ID
     session_id = str(uuid.uuid4())
     await runner.session_service.create_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=session_id
+        app_name=APP_NAME, user_id=USER_ID, session_id=session_id,
+        state=memory.get_all_preferences(),
     )
     CONVERSATIONS[session_id] = {"title": "Nueva conversacion", "pinned": False}
     CONVERSATION_ORDER.insert(0, session_id)
@@ -96,13 +112,39 @@ async def run_agent(message: str, files=None) -> str:
     content = types.Content(role='user', parts=parts)
 
     final_response = ""
+    tool_calls = []
+    metrics = None
+    confirmation = None
+
+    METRIC_TOOLS = ('get_campaign_metrics', 'get_keyword_performance')
+
     async for event in runner.run_async(
         user_id=USER_ID, session_id=session_id, new_message=content
     ):
+        for fc in event.get_function_calls():
+            tool_calls.append(fc.name)
+
+        for fr in event.get_function_responses():
+            response = fr.response or {}
+            if response.get('type') == 'confirmation':
+                confirmation = response
+            elif fr.name in METRIC_TOOLS:
+                try:
+                    parsed = json.loads(response.get('result', ''))
+                    if isinstance(parsed, list) and parsed and 'error' not in parsed[0]:
+                        metrics = parsed
+                except (ValueError, TypeError):
+                    pass
+
         if event.is_final_response() and event.content and event.content.parts:
             final_response = event.content.parts[0].text
 
-    return final_response or "Vivy no pudo generar una respuesta."
+    return {
+        'text': final_response or "Vivy no pudo generar una respuesta.",
+        'tool_calls': tool_calls,
+        'metrics': metrics,
+        'confirmation': confirmation,
+    }
 
 
 @app.route('/')
@@ -122,10 +164,62 @@ def chat():
             files = []
 
         loop = get_event_loop()
-        respuesta = loop.run_until_complete(run_agent(user_message, files))
-        return jsonify({'response': respuesta})
+        result = loop.run_until_complete(run_agent(user_message, files))
+        return jsonify({
+            'response': result['text'],
+            'tool_calls': result['tool_calls'],
+            'metrics': result['metrics'],
+            'confirmation': result['confirmation'],
+        })
     except Exception as e:
         return jsonify({'response': f"Error en Vivy: {str(e)}"}), 500
+
+
+@app.route('/messages', methods=['GET'])
+def get_messages():
+    session_id = request.args.get('id')
+    if session_id not in CONVERSATIONS:
+        return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
+
+    loop = get_event_loop()
+    session = loop.run_until_complete(
+        runner.session_service.get_session(
+            app_name=APP_NAME, user_id=USER_ID, session_id=session_id
+        )
+    )
+
+    messages = []
+    for event in (session.events if session else []):
+        if not event.content or not event.content.parts:
+            continue
+        if event.content.role not in ('user', 'model'):
+            continue
+        text = ''.join(part.text for part in event.content.parts if part.text)
+        if text.strip():
+            messages.append({'role': event.content.role, 'text': text})
+
+    return jsonify({'messages': messages})
+
+
+@app.route('/confirm_action', methods=['POST'])
+def confirm_action():
+    data = request.get_json() or {}
+    action_id = data.get('action_id')
+    message = execute_confirmed_action(action_id)
+    return jsonify({'status': 'ok', 'message': message})
+
+
+@app.route('/preferences', methods=['GET'])
+def get_preferences():
+    return jsonify(memory.get_all_preferences())
+
+
+@app.route('/preferences', methods=['POST'])
+def update_preferences():
+    data = request.get_json() or {}
+    for key, value in data.items():
+        memory.set_preference(key, value)
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/conversations', methods=['GET'])
