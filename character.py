@@ -63,6 +63,7 @@ def get_campaign_metrics(date_range: str = "LAST_7_DAYS") -> str:
             metrics.conversions
         FROM campaign
         WHERE campaign.status = 'ENABLED'
+            AND campaign.serving_status = 'SERVING'
             AND segments.date DURING {date_range}
     """
 

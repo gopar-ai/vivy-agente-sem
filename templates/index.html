@@ -33,9 +33,9 @@
         }
 
         [data-mode="elegant"] {
-            --bg:           #080810;
-            --surface:      #0d0d18;
-            --surface2:     #111120;
+            --bg:           #000000;
+            --surface:      #080808;
+            --surface2:     #0f0f0f;
             --border:       rgba(255,255,255,0.07);
             --border-hot:   rgba(255,255,255,0.18);
             --accent:       #e8e0ff;
@@ -96,7 +96,7 @@
 
         .vivy-zone {
             display: flex; flex-direction: column; align-items: center;
-            padding: 16px 20px 16px;
+            padding: 12px 20px 12px;
             border-bottom: 1px solid var(--border);
             position: relative;
         }
@@ -116,7 +116,7 @@
             position: relative;
             width: 160px; height: 160px;
             display: flex; align-items: center; justify-content: center;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
         .vivy-ring {
             position: absolute; inset: -10px; border-radius: 50%;
@@ -182,7 +182,7 @@
         @keyframes blink { 50%{opacity:0} }
 
         .mode-toggle {
-            position: absolute; top: 14px; right: 14px;
+            position: absolute; top: 10px; right: 10px;
             width: 28px; height: 28px; border-radius: 50%;
             border: 1px solid var(--border);
             background: transparent;
@@ -500,7 +500,7 @@
                      alt="AI Vivy" class="vivy-img">
             </div>
             <div class="vivy-name">VIVY</div>
-            <div class="vivy-sub">// Agente SEM</div>
+            <div class="vivy-sub">// agente sem</div>
             <div class="status-pill">
                 <span class="status-dot"></span>
                 <span id="vivy-status">online</span>
