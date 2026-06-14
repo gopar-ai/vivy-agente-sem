@@ -22,13 +22,22 @@ Vivy — Agente LLM (GPT-4o-mini + Google ADK)
                        ──► reporte HTML descargable por rango de fechas
 ```
 
-El avatar anima la boca en sincronía con la respuesta hablada (Web Speech API), y la interfaz tiene dos modos visuales.
-
 ---
 
 ## Demo
 
-[▶️ Ver video de demo](https://github.com/gopar-ai/vivy-agente-sem/releases/download/demo-v1/Vivy.Agente.SEM.mp4)
+El avatar anima la boca en sincronía con la respuesta hablada (Web Speech API), y la interfaz tiene dos modos visuales.
+
+
+
+
+
+https://github.com/user-attachments/assets/9f501686-9efa-4c0b-84b7-ddc4ab5936ab
+
+
+
+
+
 
 ---
 
