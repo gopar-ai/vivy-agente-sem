@@ -8,7 +8,7 @@ Agente conversacional con IA, y avatar animado, que analiza campañas de Google 
 Usuario (chat / voz)
      │
      ▼
-Vivy — Agente LLM (GPT-4o-mini + Google ADK)
+Agente LLM (GPT-4o-mini + Google ADK)
      │
      ├─► Google Ads API ──► leer métricas (CTR, CPC, impresiones, conversiones)
      │                  ──► pausar keywords / ajustar presupuesto (con confirmación)
