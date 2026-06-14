@@ -1,10 +1,11 @@
-# vivy-agente-sem
+# Vivy — Agente SEM
 
-Agente SEM con IA que analiza campañas, sugiere optimizaciones y ejecuta cambios directos en Google Ads mediante lenguaje natural.
+Agente conversacional con IA, persona cyberpunk y avatar animado, que analiza campañas de Google Ads, sugiere optimizaciones y ejecuta cambios (con confirmación) mediante lenguaje natural.
 
 ## Cómo funciona
 
-Jan (chat)
+```
+Jan (chat / voz)
      │
      ▼
 Vivy — Agente LLM (GPT-4o-mini + Google ADK)
@@ -16,34 +17,61 @@ Vivy — Agente LLM (GPT-4o-mini + Google ADK)
      │
      ├─► Visión multimodal ──► análisis de capturas de pantalla de Google Ads
      │
-     └─► Flask backend ──► historial de conversaciones + memoria de preferencias
+     └─► Flask backend ──► conversaciones y mensajes persistidos en PostgreSQL
+                       ──► memoria de preferencias (SQLite)
                        ──► reporte HTML descargable por rango de fechas
+```
 
-## Stack
+El avatar de Vivy anima la boca en sincronía con la respuesta hablada (Web Speech API), y la interfaz tiene dos modos visuales (Cyber / Elegante).
 
-| Capa | Tecnología |
-|---|---|
-| Agente | Google ADK + LiteLLM (GPT-4o-mini) |
-| Backend | Python / Flask |
-| Ads | Google Ads API v19 |
-| Search | DuckDuckGo Search |
-| Frontend | Vanilla JS / CSS — modos Cyber y Elegante |
-| Deploy | Railway |
+---
+
+## Demo
+
+### Interfaz de chat
+![Chat con Vivy](docs/screenshots/chat.png)
+
+### Métricas de campañas
+![Métricas de Google Ads](docs/screenshots/metrics.png)
+
+### Video
+*(pendiente — agregar enlace o GIF de demo)*
+
+---
 
 ## Setup
 
-1. Clona el repo
-2. Copia `.env.example` a `.env` y llena las variables
-3. `pip install -r requirements.txt`
-4. `python app.py`
+```bash
+cp .env.example .env   # completa tus credenciales
+pip install -r requirements.txt
+python app.py
+```
+
+El servidor queda disponible en `http://localhost:5000`.
 
 ## Variables de entorno
 
 | Variable | Descripción |
 |---|---|
-| `OPENAI_API_KEY` | API key de OpenAI |
+| `PORT` | Puerto del servidor (default: `5000`) |
+| `FLASK_DEBUG` | `1` para modo debug, `0` en producción |
+| `OPENAI_API_KEY` | API key de OpenAI (modelo GPT-4o-mini vía LiteLLM) |
+| `GEMINI_API_KEY` | API key de Gemini (opcional, según el modelo configurado) |
+| `DATABASE_URL` | URL de conexión a PostgreSQL para persistir conversaciones y mensajes. Si no está disponible, la app hace fallback automático a SQLite local |
 | `GOOGLE_ADS_DEVELOPER_TOKEN` | Token de desarrollador de Google Ads |
-| `GOOGLE_ADS_CLIENT_ID` | OAuth client ID |
-| `GOOGLE_ADS_CLIENT_SECRET` | OAuth client secret |
-| `GOOGLE_ADS_REFRESH_TOKEN` | Refresh token OAuth |
+| `GOOGLE_ADS_CLIENT_ID` | OAuth2 client ID |
+| `GOOGLE_ADS_CLIENT_SECRET` | OAuth2 client secret |
+| `GOOGLE_ADS_REFRESH_TOKEN` | OAuth2 refresh token |
 | `GOOGLE_ADS_CUSTOMER_ID` | ID de cuenta de Google Ads |
+
+---
+
+## Tech stack
+
+- **Google ADK + LiteLLM (GPT-4o-mini)** — agente conversacional
+- **Python / Flask** — backend
+- **PostgreSQL** — persistencia de conversaciones y mensajes (con fallback a SQLite)
+- **Google Ads API v19** — métricas y acciones sobre campañas
+- **DuckDuckGo Search** — contexto de mercado y noticias
+- **Vanilla JS / CSS** — frontend, modos Cyber y Elegante, animación de avatar y Web Speech API
+- **Railway** — deploy
