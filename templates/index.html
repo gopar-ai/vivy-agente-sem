@@ -628,6 +628,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const IMG_CLOSED = "{{ url_for('static', filename='images/char-mouth-closed.png') }}?v={{ cache_bust }}";
     const IMG_OPEN   = "{{ url_for('static', filename='images/char-mouth-open.png') }}?v={{ cache_bust }}";
+    new Image().src = IMG_OPEN;
+    new Image().src = IMG_CLOSED;
 
     let voiceOn      = false;
     let pendingFiles = [];
@@ -970,7 +972,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     sendBtn.addEventListener('click', () => sendMessage(textInput.value.trim()));
 
+    const loadCurrentMessages = async () => {
+        try {
+            const res = await fetch('/conversations');
+            const data = await res.json();
+            if (!data.current) return;
+            const mres = await fetch(`/messages?session_id=${data.current}`);
+            const mdata = await mres.json();
+            if (mdata.messages && mdata.messages.length) {
+                mdata.messages.forEach(m => addMessage(m.role === 'model' ? 'vivy' : m.role, m.text));
+            }
+        } catch {}
+    };
+
     loadConvs();
+    loadCurrentMessages();
 });
 </script>
 </body>
