@@ -28,16 +28,7 @@ Agente LLM (GPT-4o-mini + Google ADK)
 
 El avatar anima la boca en sincronía con la respuesta hablada (Web Speech API), y la interfaz tiene dos modos visuales.
 
-
-
-
-
 https://github.com/user-attachments/assets/9f501686-9efa-4c0b-84b7-ddc4ab5936ab
-
-
-
-
-
 
 ---
 
