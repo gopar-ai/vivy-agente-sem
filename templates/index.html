@@ -176,13 +176,14 @@
         }
         .status-dot {
             width: 6px; height: 6px; border-radius: 50%;
-            background: #00ff8c; box-shadow: 0 0 5px #00ff8c;
+            background: #ff0055; box-shadow: 0 0 5px #ff0055;
             animation: blink 1.8s steps(1) infinite;
         }
         @keyframes blink { 50%{opacity:0} }
 
         .mode-toggle {
             position: absolute; top: 10px; right: 10px;
+            z-index: 10;
             width: 28px; height: 28px; border-radius: 50%;
             border: 1px solid var(--border);
             background: transparent;
