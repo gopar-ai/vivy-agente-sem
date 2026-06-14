@@ -141,6 +141,10 @@
             object-fit: cover; position: relative; z-index: 1;
             transition: filter 0.35s;
         }
+        .vivy-img.mouth-open {
+            position: absolute; inset: 0;
+        }
+        .mouth-hidden { opacity: 0; }
 
         .vivy-name {
             font-family: var(--font-display);
@@ -497,9 +501,12 @@
             <div class="vivy-ring-wrap">
                 <div class="vivy-ring-outer"></div>
                 <div class="vivy-ring"></div>
-                <img id="character-image"
+                <img id="character-image-closed"
                      src="{{ url_for('static', filename='images/char-mouth-closed.png') }}?v={{ cache_bust }}"
                      alt="AI Vivy" class="vivy-img">
+                <img id="character-image-open"
+                     src="{{ url_for('static', filename='images/char-mouth-open.png') }}?v={{ cache_bust }}"
+                     alt="AI Vivy" class="vivy-img mouth-open mouth-hidden">
             </div>
             <div class="vivy-name">VIVY</div>
             <div class="vivy-sub">// agente sem</div>
@@ -616,7 +623,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const attachBtn     = document.getElementById('attach-btn');
     const fileInput     = document.getElementById('file-input');
     const attPreview    = document.getElementById('att-preview');
-    const charImg       = document.getElementById('character-image');
+    const charImgClosed = document.getElementById('character-image-closed');
+    const charImgOpen   = document.getElementById('character-image-open');
     const vivyStatus    = document.getElementById('vivy-status');
     const chatTitle     = document.getElementById('chat-title');
     const dateRangeBtn  = document.getElementById('date-range-btn');
@@ -626,14 +634,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportDlBtn   = document.getElementById('report-download-btn');
     const topbarReport  = document.getElementById('topbar-report-btn');
 
-    const IMG_CLOSED = "{{ url_for('static', filename='images/char-mouth-closed.png') }}?v={{ cache_bust }}";
-    const IMG_OPEN   = "{{ url_for('static', filename='images/char-mouth-open.png') }}?v={{ cache_bust }}";
-    new Image().src = IMG_OPEN;
-    new Image().src = IMG_CLOSED;
-
     let voiceOn      = false;
     let pendingFiles = [];
     let lipInterval  = null;
+    let lipTimeout   = null;
+    let currentUtterance = null;
     let spanishVoice = null;
     let currentMode  = localStorage.getItem('vivy-mode') || 'cyber';
     let selectedRange = 'LAST_7_DAYS';
@@ -648,14 +653,17 @@ document.addEventListener('DOMContentLoaded', () => {
     modeToggle.addEventListener('click', () => applyMode(currentMode === 'cyber' ? 'elegant' : 'cyber'));
 
     const pickVoice = () => {
+        if (!('speechSynthesis' in window)) return;
         const vs = window.speechSynthesis.getVoices();
         const es = vs.filter(v => v.lang.startsWith('es'));
         const F = /female|mujer|paulina|valeria|sofia|mia|lupe|laura|elena|monica/i;
         const M = /male|hombre|jorge|diego|pablo|carlos|raul/i;
         spanishVoice = es.find(v => F.test(v.name)) || es.find(v => !M.test(v.name)) || es[0] || null;
     };
-    pickVoice();
-    window.speechSynthesis.onvoiceschanged = pickVoice;
+    if ('speechSynthesis' in window) {
+        pickVoice();
+        window.speechSynthesis.onvoiceschanged = pickVoice;
+    }
 
     voiceBtn.addEventListener('click', () => {
         voiceOn = !voiceOn;
@@ -675,21 +683,43 @@ document.addEventListener('DOMContentLoaded', () => {
         .replace(/\s{2,}/g, ' ')
         .trim();
     const speak = (t) => {
-        if (!voiceOn) return;
-        const u = new SpeechSynthesisUtterance(cleanForSpeech(t));
-        u.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
-        if (spanishVoice) u.voice = spanishVoice;
-        u.pitch = 1.2; u.rate = 1.05;
-        u.onstart = startLip; u.onend = stopLip;
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(u);
+        const cleanText = cleanForSpeech(t);
+
+        // La boca se anima segun la duracion estimada del texto, independientemente
+        // de si la sintesis de voz esta activada o disponible en el navegador.
+        startLip();
+        clearTimeout(lipTimeout);
+        const estimatedDuration = Math.max(800, (cleanText.length / 14) * 1000);
+        lipTimeout = setTimeout(stopLip, estimatedDuration);
+
+        if (!voiceOn || !('speechSynthesis' in window)) return;
+        try {
+            const u = new SpeechSynthesisUtterance(cleanText);
+            u.lang = spanishVoice ? spanishVoice.lang : 'es-ES';
+            if (spanishVoice) u.voice = spanishVoice;
+            u.pitch = 1.2; u.rate = 1.05;
+            u.onstart = startLip; u.onend = stopLip;
+            currentUtterance = u;
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(u);
+        } catch (e) {}
     };
 
     const startLip = () => {
+        if (lipInterval) return;
         let o = false;
-        lipInterval = setInterval(() => { charImg.src = o ? IMG_CLOSED : IMG_OPEN; o = !o; }, 220);
+        lipInterval = setInterval(() => {
+            o = !o;
+            charImgOpen.classList.toggle('mouth-hidden', !o);
+            charImgClosed.classList.toggle('mouth-hidden', o);
+        }, 220);
     };
-    const stopLip = () => { clearInterval(lipInterval); lipInterval = null; charImg.src = IMG_CLOSED; };
+    const stopLip = () => {
+        clearInterval(lipInterval); lipInterval = null;
+        clearTimeout(lipTimeout); lipTimeout = null;
+        charImgOpen.classList.add('mouth-hidden');
+        charImgClosed.classList.remove('mouth-hidden');
+    };
 
     const dateLabels = {
         LAST_7_DAYS:'Últimos 7 días', LAST_14_DAYS:'Últimos 14 días',
