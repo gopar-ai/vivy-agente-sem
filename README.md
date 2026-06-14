@@ -1,11 +1,11 @@
-# Vivy — Agente SEM
+Agente SEM
 
 Agente conversacional con IA, y avatar animado, que analiza campañas de Google Ads, sugiere optimizaciones y ejecuta cambios (con confirmación) mediante lenguaje natural.
 
 ## Cómo funciona
 
 ```
-Jan (chat / voz)
+Usuario (chat / voz)
      │
      ▼
 Vivy — Agente LLM (GPT-4o-mini + Google ADK)
@@ -13,7 +13,7 @@ Vivy — Agente LLM (GPT-4o-mini + Google ADK)
      ├─► Google Ads API ──► leer métricas (CTR, CPC, impresiones, conversiones)
      │                  ──► pausar keywords / ajustar presupuesto (con confirmación)
      │
-     ├─► Web Search (DuckDuckGo) ──► contexto de mercado y noticias
+     ├─► Web Search (DuckDuckGo) ──► contexto de mercado 
      │
      ├─► Visión multimodal ──► análisis de capturas de pantalla de Google Ads
      │
@@ -22,20 +22,13 @@ Vivy — Agente LLM (GPT-4o-mini + Google ADK)
                        ──► reporte HTML descargable por rango de fechas
 ```
 
-El avatar de Vivy anima la boca en sincronía con la respuesta hablada (Web Speech API), y la interfaz tiene dos modos visuales (Cyber / Elegante).
+El avatar anima la boca en sincronía con la respuesta hablada (Web Speech API), y la interfaz tiene dos modos visuales.
 
 ---
 
 ## Demo
 
-### Interfaz de chat
-![Chat con Vivy](docs/screenshots/chat.png)
 
-### Métricas de campañas
-![Métricas de Google Ads](docs/screenshots/metrics.png)
-
-### Video
-*(pendiente — agregar enlace o GIF de demo)*
 
 ---
 
