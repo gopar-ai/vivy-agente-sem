@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vivy</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon-v.png') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon-v.png') }}?v={{ cache_bust }}">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -498,7 +498,7 @@
                 <div class="vivy-ring-outer"></div>
                 <div class="vivy-ring"></div>
                 <img id="character-image"
-                     src="{{ url_for('static', filename='images/char-mouth-closed.png') }}"
+                     src="{{ url_for('static', filename='images/char-mouth-closed.png') }}?v={{ cache_bust }}"
                      alt="AI Vivy" class="vivy-img">
             </div>
             <div class="vivy-name">VIVY</div>
@@ -626,8 +626,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportDlBtn   = document.getElementById('report-download-btn');
     const topbarReport  = document.getElementById('topbar-report-btn');
 
-    const IMG_CLOSED = "{{ url_for('static', filename='images/char-mouth-closed.png') }}";
-    const IMG_OPEN   = "{{ url_for('static', filename='images/char-mouth-open.png') }}";
+    const IMG_CLOSED = "{{ url_for('static', filename='images/char-mouth-closed.png') }}?v={{ cache_bust }}";
+    const IMG_OPEN   = "{{ url_for('static', filename='images/char-mouth-open.png') }}?v={{ cache_bust }}";
 
     let voiceOn      = false;
     let pendingFiles = [];
@@ -936,6 +936,12 @@ document.addEventListener('DOMContentLoaded', () => {
             welcomeScreen.classList.add('visible');
             reportBar.classList.remove('visible');
             await loadConvs();
+
+            const res = await fetch(`/messages?session_id=${id}`);
+            const data = await res.json();
+            if (data.messages && data.messages.length) {
+                data.messages.forEach(m => addMessage(m.role === 'model' ? 'vivy' : m.role, m.text));
+            }
         } catch {}
     };
 

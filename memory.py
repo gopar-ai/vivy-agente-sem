@@ -30,15 +30,6 @@ def init_db():
                 executed_at TEXT
             )
         """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id TEXT,
-                role TEXT,
-                text TEXT,
-                created_at TEXT
-            )
-        """)
 
 
 def get_preference(key, default=None):
@@ -82,25 +73,3 @@ def update_action_status(action_id, status):
             (status, now, action_id),
         )
 
-
-def delete_messages(conversation_id):
-    with _connect() as conn:
-        conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
-
-
-def save_message(conversation_id, role, text):
-    now = datetime.now(timezone.utc).isoformat()
-    with _connect() as conn:
-        conn.execute(
-            "INSERT INTO messages (conversation_id, role, text, created_at) VALUES (?, ?, ?, ?)",
-            (conversation_id, role, text, now),
-        )
-
-
-def get_messages(conversation_id):
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT role, text FROM messages WHERE conversation_id = ? ORDER BY id ASC",
-            (conversation_id,),
-        ).fetchall()
-    return [{"role": row[0], "text": row[1]} for row in rows]

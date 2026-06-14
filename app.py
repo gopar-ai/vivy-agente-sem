@@ -2,6 +2,7 @@ import os
 import socket
 import asyncio
 import json
+import time
 import uuid
 
 # Railway resuelve DNS via IPv6 primero, lo que rompe la conexion a la API
@@ -148,8 +149,8 @@ async def run_agent(message: str, files=None) -> str:
     final_response = final_response or "Vivy no pudo generar una respuesta."
 
     if message.strip():
-        memory.save_message(session_id, 'user', message)
-    memory.save_message(session_id, 'model', final_response)
+        conversations_db.save_message(str(uuid.uuid4()), session_id, 'user', message)
+    conversations_db.save_message(str(uuid.uuid4()), session_id, 'model', final_response)
 
     return {
         'text': final_response,
@@ -159,9 +160,12 @@ async def run_agent(message: str, files=None) -> str:
     }
 
 
+CACHE_BUST = str(int(time.time()))
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', cache_bust=CACHE_BUST)
 
 
 @app.route('/chat', methods=['POST'])
@@ -189,11 +193,11 @@ def chat():
 
 @app.route('/messages', methods=['GET'])
 def get_messages():
-    session_id = request.args.get('id')
+    session_id = request.args.get('session_id') or request.args.get('id')
     if not conversations_db.exists(session_id):
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
 
-    return jsonify({'messages': memory.get_messages(session_id)})
+    return jsonify({'messages': conversations_db.get_messages(session_id)})
 
 
 @app.route('/confirm_action', methods=['POST'])
@@ -275,7 +279,7 @@ def delete_chat():
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
 
     conversations_db.delete_conversation(session_id)
-    memory.delete_messages(session_id)
+    conversations_db.delete_messages(session_id)
 
     current = conversations_db.get_current_session()
     if current == session_id:
