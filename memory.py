@@ -30,6 +30,23 @@ def init_db():
                 executed_at TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                pinned INTEGER DEFAULT 0,
+                created_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT,
+                role TEXT,
+                text TEXT,
+                created_at TEXT
+            )
+        """)
 
 
 def get_preference(key, default=None):
@@ -72,3 +89,58 @@ def update_action_status(action_id, status):
             "UPDATE actions_log SET status = ?, executed_at = ? WHERE action_id = ?",
             (status, now, action_id),
         )
+
+
+def save_conversation(conversation_id, title, pinned=False):
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute("""
+            INSERT INTO conversations (id, title, pinned, created_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET title = excluded.title, pinned = excluded.pinned
+        """, (conversation_id, title, int(pinned), now))
+
+
+def update_conversation_title(conversation_id, title):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id)
+        )
+
+
+def update_conversation_pinned(conversation_id, pinned):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE conversations SET pinned = ? WHERE id = ?", (int(pinned), conversation_id)
+        )
+
+
+def delete_conversation(conversation_id):
+    with _connect() as conn:
+        conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+        conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+
+
+def get_all_conversations():
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, title, pinned FROM conversations ORDER BY created_at DESC"
+        ).fetchall()
+    return [{"id": row[0], "title": row[1], "pinned": bool(row[2])} for row in rows]
+
+
+def save_message(conversation_id, role, text):
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO messages (conversation_id, role, text, created_at) VALUES (?, ?, ?, ?)",
+            (conversation_id, role, text, now),
+        )
+
+
+def get_messages(conversation_id):
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT role, text FROM messages WHERE conversation_id = ? ORDER BY id ASC",
+            (conversation_id,),
+        ).fetchall()
+    return [{"role": row[0], "text": row[1]} for row in rows]

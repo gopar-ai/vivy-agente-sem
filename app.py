@@ -84,6 +84,7 @@ async def create_conversation():
     CONVERSATIONS[session_id] = {"title": "Nueva conversacion", "pinned": False}
     CONVERSATION_ORDER.insert(0, session_id)
     CURRENT_SESSION_ID = session_id
+    memory.save_conversation(session_id, "Nueva conversacion", False)
     return session_id
 
 
@@ -94,12 +95,29 @@ async def ensure_conversation():
     return CURRENT_SESSION_ID
 
 
+async def load_conversations():
+    global CURRENT_SESSION_ID
+    for conv in memory.get_all_conversations():
+        CONVERSATIONS[conv['id']] = {"title": conv['title'], "pinned": conv['pinned']}
+        CONVERSATION_ORDER.append(conv['id'])
+        await runner.session_service.create_session(
+            app_name=APP_NAME, user_id=USER_ID, session_id=conv['id'],
+            state=memory.get_all_preferences(),
+        )
+    if CONVERSATION_ORDER:
+        CURRENT_SESSION_ID = CONVERSATION_ORDER[0]
+
+
+get_event_loop().run_until_complete(load_conversations())
+
+
 async def run_agent(message: str, files=None) -> str:
     session_id = await ensure_conversation()
 
     if CONVERSATIONS[session_id]["title"] == "Nueva conversacion" and message.strip():
         title = message.strip().replace("\n", " ")
         CONVERSATIONS[session_id]["title"] = (title[:40] + "...") if len(title) > 40 else title
+        memory.update_conversation_title(session_id, CONVERSATIONS[session_id]["title"])
 
     parts = []
     for file in (files or []):
@@ -139,8 +157,14 @@ async def run_agent(message: str, files=None) -> str:
         if event.is_final_response() and event.content and event.content.parts:
             final_response = event.content.parts[0].text
 
+    final_response = final_response or "Vivy no pudo generar una respuesta."
+
+    if message.strip():
+        memory.save_message(session_id, 'user', message)
+    memory.save_message(session_id, 'model', final_response)
+
     return {
-        'text': final_response or "Vivy no pudo generar una respuesta.",
+        'text': final_response,
         'tool_calls': tool_calls,
         'metrics': metrics,
         'confirmation': confirmation,
@@ -181,24 +205,7 @@ def get_messages():
     if session_id not in CONVERSATIONS:
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
 
-    loop = get_event_loop()
-    session = loop.run_until_complete(
-        runner.session_service.get_session(
-            app_name=APP_NAME, user_id=USER_ID, session_id=session_id
-        )
-    )
-
-    messages = []
-    for event in (session.events if session else []):
-        if not event.content or not event.content.parts:
-            continue
-        if event.content.role not in ('user', 'model'):
-            continue
-        text = ''.join(part.text for part in event.content.parts if part.text)
-        if text.strip():
-            messages.append({'role': event.content.role, 'text': text})
-
-    return jsonify({'messages': messages})
+    return jsonify({'messages': memory.get_messages(session_id)})
 
 
 @app.route('/confirm_action', methods=['POST'])
@@ -267,6 +274,7 @@ def rename_chat():
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
     if title:
         CONVERSATIONS[session_id]['title'] = title
+        memory.update_conversation_title(session_id, title)
     return jsonify({'status': 'ok'})
 
 
@@ -277,6 +285,7 @@ def pin_chat():
     if session_id not in CONVERSATIONS:
         return jsonify({'status': 'error', 'message': 'unknown conversation'}), 404
     CONVERSATIONS[session_id]['pinned'] = not CONVERSATIONS[session_id]['pinned']
+    memory.update_conversation_pinned(session_id, CONVERSATIONS[session_id]['pinned'])
     return jsonify({'status': 'ok', 'pinned': CONVERSATIONS[session_id]['pinned']})
 
 
@@ -290,6 +299,7 @@ def delete_chat():
 
     CONVERSATIONS.pop(session_id)
     CONVERSATION_ORDER.remove(session_id)
+    memory.delete_conversation(session_id)
 
     if CURRENT_SESSION_ID == session_id:
         CURRENT_SESSION_ID = CONVERSATION_ORDER[0] if CONVERSATION_ORDER else None
